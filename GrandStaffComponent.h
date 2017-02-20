@@ -11,7 +11,7 @@
 using namespace std;
 
 /*
- * To the question "Is this a C# or a Db?". This depends on the musical context, which we can't
+ * To answer the question "Is this a C# or a Db?". This depends on the musical context, which we can't
  * know (or is difficult to know) programatically. However, we can assume that someone is playing
  * in a key, and then use the accidentals used in that key. For now, we handle only the simple cases
  * where a key uses only sharps or only flats, and all white keys are natural.
@@ -103,8 +103,8 @@ private:
   void drawLedgerLinesOnBassClef(Graphics& g, int num_ledger_lines, bool above_clef);
 
   /*
-   * If you getNoteLetter was trivial (like I did), you forgot about enharmonics. We have to
-   * consider things like "is this note F or E#?" (aka the accidental type).
+   * If you thought getNoteLetter was trivial (like I did), you forgot about enharmonics. We
+   * have to consider things like "is this note F or E#?" (aka the accidental type).
    */
   Letter getNoteLetter(int note);
  
