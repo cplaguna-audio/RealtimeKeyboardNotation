@@ -10,7 +10,7 @@
 
 /***** Public members *****/
 
-GrandStaffComponent::GrandStaffComponent() {
+GrandStaffComponent::GrandStaffComponent() : bottom_treble_note(0), bottom_bass_note(0) {
   
   // Convert images from binary data to Images. 
   grand_staff_image = ImageFileFormat::loadFrom(BinaryData::Grand_Staff_png, BinaryData::Grand_Staff_pngSize);
@@ -48,12 +48,44 @@ void GrandStaffComponent::paint (Graphics& g) {
   // Draw the staff.
   g.drawImageAt(grand_staff_image, 0, STAFF_Y_OFFSET);
   
+  vector<int> note_ys;
   // Draw each note individually.
+  int prev_note = 0;
+  bool prev_note_offset = false;
   for(int note_idx = 0; note_idx < notes_to_draw.size(); note_idx++) {
     int cur_note = notes_to_draw[note_idx];
-    drawNote(g, cur_note);
+    
+    // Clear out the previous note when switching clefs.
+    if(prev_note != 0 && drawOnTrebleClef(prev_note) != drawOnTrebleClef(cur_note)) {
+      prev_note = 0;
+      prev_note_offset = false;
+    }
+    
+    prev_note_offset = drawNote(g, cur_note, prev_note, prev_note_offset, &note_ys);
+    prev_note = cur_note;
   }
 
+  int prev_accidental = 0;
+  int cur_x = NOTE_X;
+  for(int note_idx = notes_to_draw.size() - 1; note_idx >= 0; note_idx--) {
+    int cur_note = notes_to_draw[note_idx];
+    
+    if(hasAccidental(cur_note)) {
+      if(prev_accidental == 0
+         || abs(getLetterDistance(cur_note, prev_accidental)) > 4
+         || drawOnTrebleClef(prev_accidental) != drawOnTrebleClef(cur_note)
+        ) {
+        prev_accidental = cur_note;
+        cur_x = NOTE_X;
+      }
+      else {
+        cur_x += ACCIDENTAL_X_DELTA;
+      }
+
+      drawAccidental(g, cur_x, note_ys[note_idx]);
+    }
+  }
+  
 }
 
 void GrandStaffComponent::resized() {}
@@ -65,17 +97,37 @@ void GrandStaffComponent::addNote(int midi_pitch) {
   }
   
   notes_to_draw.push_back(midi_pitch);
+  std::sort(notes_to_draw.begin(), notes_to_draw.end());
+
+  // Update bottom note.
+  if(drawOnTrebleClef(midi_pitch)) {
+    if(midi_pitch < bottom_treble_note || bottom_treble_note == 0) {
+      bottom_treble_note = midi_pitch;
+    }
+  }
+  else {
+    if(midi_pitch < bottom_bass_note || bottom_bass_note == 0) {
+      bottom_bass_note = midi_pitch;
+    }
+  }
   repaint();
 }
 
 void GrandStaffComponent::removeNote(int midi_pitch) {
-  notes_to_draw.clear();
-  repaint();
-
   // Only remove notes within the range of the keyboard.
   if(midi_pitch < MainContentComponent::getMinNote() || midi_pitch > MainContentComponent::getMaxNote()) {
     return;
   }
+  
+  std::vector<int>::iterator it = find(notes_to_draw.begin(), notes_to_draw.end(), midi_pitch);
+  if(it != notes_to_draw.end()) {
+    notes_to_draw.erase(it);
+  }
+  std::sort(notes_to_draw.begin(), notes_to_draw.end());
+  
+  // Update bottom note.
+  updateBottomNotes();
+  repaint();
 }
 
 void GrandStaffComponent::setAccidentalMode(AccidentalMode at) {
@@ -84,46 +136,85 @@ void GrandStaffComponent::setAccidentalMode(AccidentalMode at) {
 
 /***** Private Members *****/
 
+void GrandStaffComponent::updateBottomNotes() {
+  bottom_treble_note = 0;
+  bottom_bass_note = 0;
+  
+  for(int i = 0; i < notes_to_draw.size(); i++) {
+    int cur_note = notes_to_draw[i];
+    if(drawOnTrebleClef(cur_note)) {
+      if(cur_note < bottom_treble_note || bottom_treble_note == 0) {
+        bottom_treble_note = cur_note;
+      }
+    }
+    else {
+      if(cur_note < bottom_bass_note || bottom_bass_note == 0) {
+        bottom_bass_note = cur_note;
+      }
+    }
+  }
+}
+
 bool GrandStaffComponent::drawOnTrebleClef(int note) {
   // Middle C and above go on the treble clef.
   return note >= 60;
 }
 
-void GrandStaffComponent::drawNote(Graphics& g, int note) {
+bool GrandStaffComponent::drawNote(Graphics& g, int note, int prev_note, bool prev_note_offset, vector<int>* note_ys) {
+  bool did_offset = false;
   if(drawOnTrebleClef(note)) {
-    drawNoteOnTrebleClef(g, note);
+    did_offset = drawNoteOnTrebleClef(g, note, prev_note, prev_note_offset, note_ys);
   }
   else {
-    drawNoteOnBassClef(g, note);
+    did_offset = drawNoteOnBassClef(g, note, prev_note, prev_note_offset, note_ys);
   }
+  return did_offset;
 }
 
-void GrandStaffComponent::drawNoteOnTrebleClef(Graphics& g, int note) {
+bool GrandStaffComponent::drawNoteOnTrebleClef(Graphics& g, int note, int prev_note, bool prev_note_offset, vector<int>* note_ys) {
+  bool did_offset = false;
   int note_x = NOTE_X;
   int distance = getLetterDistance(note, 69);
+  
+  // Checking to add an x-offset to the note.
+  if(prev_note > 0) {
+    if(getLetterDistance(note, prev_note) < 2 && !prev_note_offset) {
+      note_x = note_x + X_LINE_DELTA;
+      did_offset = true;
+    }
+  }
+  
   int note_y = MIDI_69_Y - (distance * NOTE_DELTA_Y);
   g.drawImageAt(whole_note_image, note_x, note_y);
   
-  if(hasAccidental(note)) {
-    drawAccidental(g, note_x, note_y);
-  }
+  note_ys->push_back(note_y);
   
   int num_ledger_lines = getNumberLedgerLines(distance);
   drawLedgerLinesOnTrebleClef(g, num_ledger_lines, distance > 0);
+  return did_offset;
 }
 
-void GrandStaffComponent::drawNoteOnBassClef(Graphics& g, int note) {
+bool GrandStaffComponent::drawNoteOnBassClef(Graphics& g, int note, int prev_note, bool prev_note_offset, vector<int>* note_ys) {
+  bool did_offset = false;
   int note_x = NOTE_X;
   int distance = getLetterDistance(note, 48);
+
+  // Checking to add an x-offset to the note.
+  if(prev_note > 0) {
+    if(getLetterDistance(note, prev_note) < 2 && !prev_note_offset) {
+      note_x = note_x + X_LINE_DELTA;
+      did_offset = true;
+    }
+  }
+  
   int note_y = MIDI_48_Y - (distance * NOTE_DELTA_Y);
   g.drawImageAt(whole_note_image, note_x, note_y);
   
-  if(hasAccidental(note)) {
-    drawAccidental(g, note_x, note_y);
-  }
+  note_ys->push_back(note_y);
   
   int num_ledger_lines = getNumberLedgerLines(distance);
   drawLedgerLinesOnBassClef(g, num_ledger_lines, distance > 0);
+  return did_offset;
 }
 
 bool GrandStaffComponent::hasAccidental(int note) {
@@ -221,6 +312,11 @@ void GrandStaffComponent::drawLedgerLinesOnBassClef(Graphics& g, int num_ledger_
     g.drawLine(start_x, y, end_x, y);
     y = y + y_delta;
   }
+}
+
+bool GrandStaffComponent::isInLine(int note, int ref) {
+  int distance = getLetterDistance(note, ref);
+  return abs(distance) % 2 == 0;
 }
 
 // Positive when the note is above the reference.

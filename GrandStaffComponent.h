@@ -77,6 +77,8 @@ private:
   const float NOTE_DELTA_Y = 3.5;            // Number of pixels to the note up or
                                              // down when changing pitch by a semitone.
   const int NOTE_X = 66;                     // X position of every note on the staff.
+  const int X_LINE_DELTA = 8;                // Adjacent note heads need to be displaced on the x axis.
+  const int ACCIDENTAL_X_DELTA = -9;          // Adjacent accidentals need to be displaced on the x axis.
   const int MIDI_69_Y = 20 + STAFF_Y_OFFSET; // Y position of A440 (midi pitch 69) on treble clef.
   const int MIDI_48_Y = 83 + STAFF_Y_OFFSET; // Y position of C3 on (midi pitch 48) bass clef.
   const int OCTAVE_DELTA = 7;                // Two notes an octave apart are separated by 7
@@ -87,11 +89,16 @@ private:
   const int FLAT_X_OFFSET = -18;   // Used to calculate the position of the flat image relative to the whole note.
   const int FLAT_Y_OFFSET = -13;   // Used to calculate the position of the flat image relative to the whole note.
   
+  int bottom_treble_note;  // The lowest note currently being drawn in the treble clef.
+  int bottom_bass_note;    // The lowest note currently being drawn in the bass clef.
+  
+  void updateBottomNotes();  // Go through |notes_to_draw| and set the bottom treble and bass notes.
+  
   // Repaint helpers.
   bool drawOnTrebleClef(int note);  // Should the note be drawn on the treble clef? (or the bass clef)
-  void drawNote(Graphics& g, int note);
-  void drawNoteOnTrebleClef(Graphics& g, int note);
-  void drawNoteOnBassClef(Graphics& g, int note);
+  bool drawNote(Graphics& g, int note, int prev_note, bool prev_note_offset, vector<int>* note_ys);
+  bool drawNoteOnTrebleClef(Graphics& g, int note, int prev_note, bool prev_note_offset, vector<int>* note_ys);
+  bool drawNoteOnBassClef(Graphics& g, int note, int prev_note, bool prev_note_offset, vector<int>* note_ys);
   
   bool hasAccidental(int note);
   void drawAccidental(Graphics& g, int x_ref, int y_ref);
@@ -101,7 +108,9 @@ private:
   int getNumberLedgerLines(int distance);
   void drawLedgerLinesOnTrebleClef(Graphics& g, int num_ledger_lines, bool above_clef);
   void drawLedgerLinesOnBassClef(Graphics& g, int num_ledger_lines, bool above_clef);
-
+  bool isInLine(int distance, int ref);  // Is the note on a line if the ref is on a line
+                                         // or is the note on a space if hte ref is on a space?
+  
   /*
    * If you thought getNoteLetter was trivial (like I did), you forgot about enharmonics. We
    * have to consider things like "is this note F or E#?" (aka the accidental type).

@@ -113,10 +113,9 @@ void MainContentComponent::handleIncomingMidiMessage(MidiInput* source, const Mi
 }
 
 void MainContentComponent::handleNoteOn(MidiKeyboardState*, int midi_channel, int midi_note_number, float velocity) {
-  (new RemoveNoteCallback(&grand_staff_component, 0))->post();
   (new AddNoteCallback(&grand_staff_component, midi_note_number))->post();
 }
 
 void MainContentComponent::handleNoteOff(MidiKeyboardState*, int midi_channel, int midi_note_number, float velocity) {
-
+  (new RemoveNoteCallback(&grand_staff_component, midi_note_number))->post();
 }
